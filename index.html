@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Chat Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 h-screen">
+    <div class="container mx-auto p-4 max-w-4xl h-full flex flex-col">
+        <!-- Chat container -->
+        <div class="bg-white rounded-lg shadow-md flex-1 flex flex-col overflow-hidden">
+            <!-- Clear history button -->
+            <div class="p-4 border-b flex justify-end">
+                <button onclick="clearHistory()" 
+                        class="text-sm text-red-500 hover:text-red-700 transition-colors">
+                    Clear History
+                </button>
+            </div>
+
+            <!-- Message history -->
+            <div id="messageHistory" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <!-- Add typing indicator -->
+            <div id="typingIndicator" class="hidden p-4 space-x-2 flex items-center">
+                <span class="text-gray-500">AI is typing</span>
+                <div class="flex space-x-1">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                </div>
+            </div>
+
+            <!-- Input area -->
+            <div class="border-t p-4 bg-gray-50">
+                <div class="flex space-x-4">
+                    <input type="text" 
+                           id="messageInput" 
+                           class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:border-blue-500"
+                           placeholder="Type your message...">
+                    <button onclick="sendMessage()" 
+                            class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messageHistory = document.getElementById('messageHistory');
+        const messageInput = document.getElementById('messageInput');
+        const typingIndicator = document.getElementById('typingIndicator');
+
+        // Add emotion color mapping
+        const emotionColors = {
+            joy: 'bg-green-500',
+            sadness: 'bg-blue-400',
+            anger: 'bg-red-500',
+            fear: 'bg-purple-500',
+            surprise: 'bg-yellow-500',
+            disgust: 'bg-orange-500',
+            neutral: 'bg-gray-500'
+        };
+
+        // Load chat history when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedMessages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+            savedMessages.forEach(msg => {
+                addMessage(msg.text, msg.isUser, false, msg.emotion);
+            });
+        });
+
+        function addMessage(text, isUser, save = true, emotion = null) {
+            const messageDiv = document.createElement('div');
+            
+            if (isUser) {
+                messageDiv.className = 'p-4 rounded-lg max-w-[80%] bg-blue-500 text-white ml-auto';
+            } else {
+                const emotionColor = emotion ? emotionColors[emotion] : 'bg-gray-200';
+                messageDiv.className = `p-4 rounded-lg max-w-[80%] ${emotionColor} text-white`;
+            }
+            
+            messageDiv.textContent = text;
+            messageHistory.appendChild(messageDiv);
+            messageHistory.scrollTop = messageHistory.scrollHeight;
+
+            // Save to localStorage if needed
+            if (save) {
+                const savedMessages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+                savedMessages.push({ text, isUser, emotion });
+                localStorage.setItem('chatHistory', JSON.stringify(savedMessages));
+            }
+        }
+
+        // Add clear history button to the top
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'p-4 border-b flex justify-end';
+        headerDiv.innerHTML = `
+            <button onclick="clearHistory()" 
+                    class="text-sm text-red-500 hover:text-red-700 transition-colors">
+                Clear History
+            </button>
+        `;
+        document.querySelector('.bg-white').insertBefore(headerDiv, messageHistory);
+
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear the chat history?')) {
+                localStorage.removeItem('chatHistory');
+                messageHistory.innerHTML = '';
+            }
+        }
+
+        function showTypingIndicator() {
+            typingIndicator.classList.remove('hidden');
+            messageHistory.scrollTop = messageHistory.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            typingIndicator.classList.add('hidden');
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, true);
+
+            // Clear input
+            messageInput.value = '';
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            // Make API call to process message
+            fetch('http://127.0.0.1:5000/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message: message })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                hideTypingIndicator();
+                addMessage(data.response, false, true, data.emotion);
+            })
+            .catch(error => {
+                hideTypingIndicator();
+                addMessage("Error: Could not reach the server. Please try again.", false);
+                console.error('Error:', error);
+            });
+        }
+
+        // Handle Enter key
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
